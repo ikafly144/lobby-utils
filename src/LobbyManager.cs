@@ -50,9 +50,9 @@ public static class LobbyManager
         }
     }
 
-    public static void RefreshConnectionInfo()
+    public static void RefreshConnectionInfo(AmongUsClient? client = null)
     {
-        UpdateConnectionInfo();
+        UpdateConnectionInfo(client);
     }
 
     public static void Enqueue(LobbyRequest request, string source)
@@ -63,27 +63,34 @@ public static class LobbyManager
 
     public static void DrainAndAttemptConnection()
     {
-        RefreshConnectionInfo();
+        var client = TryGetClient();
+        RefreshConnectionInfo(client);
 
-        if (AmongUsClient.Instance == null)
+        if (client == null)
         {
             return;
         }
 
-        if (AmongUsClient.Instance.GameState != InnerNetClient.GameStates.NotJoined)
+        if (client.GameState != InnerNetClient.GameStates.NotJoined)
         {
             return;
         }
 
         while (PendingRequests.TryDequeue(out var request))
         {
-            ProcessRequest(AmongUsClient.Instance, request);
+            ProcessRequest(client, request);
         }
     }
 
-    private static void UpdateConnectionInfo()
+    private static AmongUsClient? TryGetClient()
     {
-        if (AmongUsClient.Instance == null)
+        return UnityEngine.Object.FindObjectOfType<AmongUsClient>();
+    }
+
+    private static void UpdateConnectionInfo(AmongUsClient? client = null)
+    {
+        client ??= TryGetClient();
+        if (client == null)
         {
             lock (ConnectionInfoLock)
             {
@@ -103,7 +110,6 @@ public static class LobbyManager
             return;
         }
 
-        var client = AmongUsClient.Instance;
         string? lobbyCode = TryFormatLobbyCode(client.GameId);
         string? serverIp;
         int? serverPort;
@@ -229,8 +235,8 @@ public static class MainMenuManagerPatch
 [System.Runtime.Versioning.SupportedOSPlatform("windows")]
 public static class AmongUsClientUpdatePatch
 {
-    public static void Postfix()
+    public static void Postfix(AmongUsClient __instance)
     {
-        LobbyManager.RefreshConnectionInfo();
+        LobbyManager.RefreshConnectionInfo(__instance);
     }
 }
