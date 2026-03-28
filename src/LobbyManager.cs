@@ -1,7 +1,6 @@
 using HarmonyLib;
 using InnerNet;
 using System.Collections.Concurrent;
-using System.Reflection;
 using UnityEngine;
 
 namespace LobbyUtils;
@@ -25,11 +24,10 @@ public readonly record struct LobbyConnectionInfo(
 public static class LobbyManager
 {
     private static readonly ConcurrentQueue<LobbyRequest> PendingRequests = new();
-    private static readonly PropertyInfo? NetworkAddressProperty = AccessTools.Property(typeof(AmongUsClient), "networkAddress");
-    private static readonly FieldInfo? NetworkAddressField = AccessTools.Field(typeof(AmongUsClient), "networkAddress");
-    private static readonly PropertyInfo? NetworkPortProperty = AccessTools.Property(typeof(AmongUsClient), "networkPort");
-    private static readonly FieldInfo? NetworkPortField = AccessTools.Field(typeof(AmongUsClient), "networkPort");
     private static readonly object ConnectionInfoLock = new();
+    private static readonly object EndpointLock = new();
+    private static string? _lastRequestedServerIp;
+    private static int? _lastRequestedServerPort;
     private static LobbyConnectionInfo _connectionInfo = new(
         HasClient: false,
         IsConnected: false,
@@ -107,8 +105,13 @@ public static class LobbyManager
 
         var client = AmongUsClient.Instance;
         string? lobbyCode = TryFormatLobbyCode(client.GameId);
-        string? serverIp = TryGetServerAddress(client);
-        int? serverPort = TryGetServerPort(client);
+        string? serverIp;
+        int? serverPort;
+        lock (EndpointLock)
+        {
+            serverIp = _lastRequestedServerIp;
+            serverPort = _lastRequestedServerPort;
+        }
         int? gameId = client.GameId != 0 ? client.GameId : null;
         bool isConnected = client.GameState != InnerNetClient.GameStates.NotJoined;
 
@@ -153,33 +156,6 @@ public static class LobbyManager
         }
     }
 
-    private static string? TryGetServerAddress(AmongUsClient client)
-    {
-        var raw = NetworkAddressProperty?.GetValue(client) ?? NetworkAddressField?.GetValue(client);
-        if (raw is not string address || string.IsNullOrWhiteSpace(address))
-        {
-            return null;
-        }
-
-        return address;
-    }
-
-    private static int? TryGetServerPort(AmongUsClient client)
-    {
-        var raw = NetworkPortProperty?.GetValue(client) ?? NetworkPortField?.GetValue(client);
-        if (raw is null)
-        {
-            return null;
-        }
-
-        if (!int.TryParse(raw.ToString(), out int port) || port <= 0)
-        {
-            return null;
-        }
-
-        return port;
-    }
-
     private static void ProcessRequest(AmongUsClient client, LobbyRequest request)
     {
         bool hasCode = !string.IsNullOrWhiteSpace(request.LobbyCode);
@@ -187,6 +163,11 @@ public static class LobbyManager
 
         if (hasEndpoint)
         {
+            lock (EndpointLock)
+            {
+                _lastRequestedServerIp = request.ServerIp;
+                _lastRequestedServerPort = request.ServerPort;
+            }
             client.SetEndpoint(request.ServerIp!, request.ServerPort!.Value, dtls: false);
             LobbyUtilsPlugin.PluginLog.LogInfo($"Applied server endpoint: {request.ServerIp}:{request.ServerPort.Value}");
         }

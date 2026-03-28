@@ -41,7 +41,7 @@
 
   <ItemGroup Condition="'$(UseDirectGameReferences)' != 'true'">
     <PackageReference Include="BepInEx.Unity.IL2CPP" Version="6.0.0-be.755" IncludeAssets="compile" />
-    <PackageReference Include="AmongUs.GameLibs.Steam" Version="2025.10.14" IncludeAssets="compile" GeneratePathProperty="true" />
+    <PackageReference Include="AmongUs.GameLibs.Steam" Version="2025.11.18" IncludeAssets="compile" GeneratePathProperty="true" />
 
     <Reference Include="Assembly-CSharp">
       <HintPath>$(PkgAmongUs_GameLibs_Steam)\build\Assembly-CSharp.dll</HintPath>

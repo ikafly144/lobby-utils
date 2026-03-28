@@ -10,6 +10,11 @@ on:
 jobs:
   build:
     runs-on: windows-latest
+    env:
+      DOTNET_NOLOGO: true
+      DOTNET_CLI_TELEMETRY_OPTOUT: true
+      AMONG_US_LIBS_VERSION: 2025.11.18
+      AMONG_US_LIBS_DIR: ${{ github.workspace }}\.amongus-libs
     strategy:
       fail-fast: false
       matrix:
@@ -24,10 +29,63 @@ jobs:
         with:
           dotnet-version: 8.0.x
 
+      - name: Restore game libs from NuGet
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $source = Join-Path $env:USERPROFILE ".nuget\packages\amongus.gamelibs.steam\$env:AMONG_US_LIBS_VERSION\build"
+          if (!(Test-Path $source)) {
+            dotnet restore lobby-utils.sln --nologo
+          }
+          if (!(Test-Path $source)) {
+            throw "AmongUs.GameLibs.Steam build folder not found: $source"
+          }
+
+          $core = Join-Path $env:AMONG_US_LIBS_DIR "core"
+          $interop = Join-Path $env:AMONG_US_LIBS_DIR "interop"
+          $debugCore = Join-Path $env:AMONG_US_LIBS_DIR "BepInEx\core"
+          $debugInterop = Join-Path $env:AMONG_US_LIBS_DIR "BepInEx\interop"
+          New-Item -ItemType Directory -Path $core -Force | Out-Null
+          New-Item -ItemType Directory -Path $interop -Force | Out-Null
+          New-Item -ItemType Directory -Path $debugCore -Force | Out-Null
+          New-Item -ItemType Directory -Path $debugInterop -Force | Out-Null
+
+          Copy-Item -Path (Join-Path $source "*.dll") -Destination $core -Force
+          Copy-Item -Path (Join-Path $source "*.dll") -Destination $interop -Force
+          Copy-Item -Path (Join-Path $source "*.dll") -Destination $debugCore -Force
+          Copy-Item -Path (Join-Path $source "*.dll") -Destination $debugInterop -Force
+
+          $harmonyDll = Get-ChildItem -Path (Join-Path $env:USERPROFILE ".nuget\packages\harmonyx") -Recurse -File -Filter "0Harmony.dll" |
+            Where-Object { $_.FullName -match "netstandard2\.0" } |
+            Sort-Object FullName -Descending |
+            Select-Object -First 1
+          if ($null -eq $harmonyDll) { throw "0Harmony.dll not found in NuGet cache." }
+
+          $bepinexCoreDll = Get-ChildItem -Path (Join-Path $env:USERPROFILE ".nuget\packages\bepinex.core") -Recurse -File -Filter "BepInEx.Core.dll" |
+            Where-Object { $_.FullName -match "netstandard2\.0" } |
+            Sort-Object FullName -Descending |
+            Select-Object -First 1
+          if ($null -eq $bepinexCoreDll) { throw "BepInEx.Core.dll not found in NuGet cache." }
+
+          $bepinexIl2cppDll = Get-ChildItem -Path (Join-Path $env:USERPROFILE ".nuget\packages\bepinex.unity.il2cpp") -Recurse -File -Filter "BepInEx.Unity.IL2CPP.dll" |
+            Sort-Object FullName -Descending |
+            Select-Object -First 1
+          if ($null -eq $bepinexIl2cppDll) { throw "BepInEx.Unity.IL2CPP.dll not found in NuGet cache." }
+
+          Copy-Item -Path $harmonyDll.FullName -Destination $core -Force
+          Copy-Item -Path $harmonyDll.FullName -Destination $debugCore -Force
+          Copy-Item -Path $bepinexCoreDll.FullName -Destination $core -Force
+          Copy-Item -Path $bepinexCoreDll.FullName -Destination $debugCore -Force
+          Copy-Item -Path $bepinexIl2cppDll.FullName -Destination $core -Force
+          Copy-Item -Path $bepinexIl2cppDll.FullName -Destination $debugCore -Force
+
       - name: Restore
         run: dotnet restore lobby-utils.sln --nologo
 
       - name: Build
+        env:
+          AmongUs: ${{ env.AMONG_US_LIBS_DIR }}
+          Build: ${{ env.AMONG_US_LIBS_DIR }}
         run: dotnet build lobby-utils.sln --configuration ${{ matrix.configuration }} --no-restore --nologo -v minimal
 
       - name: Upload release build artifact
