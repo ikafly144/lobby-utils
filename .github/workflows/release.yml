@@ -55,6 +55,7 @@ jobs:
           dotnet tool update il2cppinterop.cli --tool-path $toolsDir --version 1.5.1 --add-source https://nuget.bepinex.dev/v3/index.json
           $il2cppinterop = Join-Path $toolsDir "il2cppinterop.exe"
           if (!(Test-Path $il2cppinterop)) { throw "il2cppinterop tool not found: $il2cppinterop" }
+          $env:DOTNET_ROLL_FORWARD = "LatestMajor"
 
           & $il2cppinterop generate --input $source --output $generatedInterop --unity $source --no-xref-cache
           if ($LASTEXITCODE -ne 0) {
