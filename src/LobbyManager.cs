@@ -1,6 +1,7 @@
 using HarmonyLib;
 using InnerNet;
 using System.Collections.Concurrent;
+using System.Reflection;
 using UnityEngine;
 
 namespace LobbyUtils;
@@ -24,6 +25,10 @@ public readonly record struct LobbyConnectionInfo(
 public static class LobbyManager
 {
     private static readonly ConcurrentQueue<LobbyRequest> PendingRequests = new();
+    private static readonly PropertyInfo? NetworkAddressProperty = AccessTools.Property(typeof(AmongUsClient), "networkAddress");
+    private static readonly FieldInfo? NetworkAddressField = AccessTools.Field(typeof(AmongUsClient), "networkAddress");
+    private static readonly PropertyInfo? NetworkPortProperty = AccessTools.Property(typeof(AmongUsClient), "networkPort");
+    private static readonly FieldInfo? NetworkPortField = AccessTools.Field(typeof(AmongUsClient), "networkPort");
     private static readonly object ConnectionInfoLock = new();
     private static LobbyConnectionInfo _connectionInfo = new(
         HasClient: false,
@@ -102,8 +107,8 @@ public static class LobbyManager
 
         var client = AmongUsClient.Instance;
         string? lobbyCode = TryFormatLobbyCode(client.GameId);
-        string? serverIp = string.IsNullOrWhiteSpace(client.networkAddress) ? null : client.networkAddress;
-        int? serverPort = client.networkPort > 0 ? client.networkPort : null;
+        string? serverIp = TryGetServerAddress(client);
+        int? serverPort = TryGetServerPort(client);
         int? gameId = client.GameId != 0 ? client.GameId : null;
         bool isConnected = client.GameState != InnerNetClient.GameStates.NotJoined;
 
@@ -146,6 +151,33 @@ public static class LobbyManager
 
             return null;
         }
+    }
+
+    private static string? TryGetServerAddress(AmongUsClient client)
+    {
+        var raw = NetworkAddressProperty?.GetValue(client) ?? NetworkAddressField?.GetValue(client);
+        if (raw is not string address || string.IsNullOrWhiteSpace(address))
+        {
+            return null;
+        }
+
+        return address;
+    }
+
+    private static int? TryGetServerPort(AmongUsClient client)
+    {
+        var raw = NetworkPortProperty?.GetValue(client) ?? NetworkPortField?.GetValue(client);
+        if (raw is null)
+        {
+            return null;
+        }
+
+        if (!int.TryParse(raw.ToString(), out int port) || port <= 0)
+        {
+            return null;
+        }
+
+        return port;
     }
 
     private static void ProcessRequest(AmongUsClient client, LobbyRequest request)
