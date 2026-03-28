@@ -23,19 +23,15 @@
 
   <PropertyGroup>
     <UseDirectGameReferences>false</UseDirectGameReferences>
-    <UseDirectGameReferences Condition="'$(Configuration)' != 'Release' and '$(AmongUs)' != ''">true</UseDirectGameReferences>
-    <UseDirectGameReferences Condition="'$(Configuration)' == 'Release' and '$(Build)' != ''">true</UseDirectGameReferences>
+    <DirectGameLibRoot></DirectGameLibRoot>
+    <DirectGameLibRoot Condition="'$(AmongUs)' != ''">$(AmongUs)\BepInEx</DirectGameLibRoot>
+    <DirectGameLibRoot Condition="'$(DirectGameLibRoot)' == '' and '$(AmongUsBuild)' != ''">$(AmongUsBuild)</DirectGameLibRoot>
+    <UseDirectGameReferences Condition="'$(DirectGameLibRoot)' != ''">true</UseDirectGameReferences>
   </PropertyGroup>
 
-  <ItemGroup Condition="'$(UseDirectGameReferences)' == 'true' and '$(Configuration)' != 'Release'">
-    <LibReference Include="$(AmongUs)\BepInEx\core\*.dll" />
-    <LibReference Include="$(AmongUs)\BepInEx\interop\*.dll" />
-    <Reference Include="@(LibReference)" />
-  </ItemGroup>
-
-  <ItemGroup Condition="'$(UseDirectGameReferences)' == 'true' and '$(Configuration)' == 'Release'">
-    <LibReference Include="$(Build)\core\*.dll" />
-    <LibReference Include="$(Build)\interop\*.dll" />
+  <ItemGroup Condition="'$(UseDirectGameReferences)' == 'true'">
+    <LibReference Include="$(DirectGameLibRoot)\core\*.dll" />
+    <LibReference Include="$(DirectGameLibRoot)\interop\*.dll" />
     <Reference Include="@(LibReference)" />
   </ItemGroup>
 

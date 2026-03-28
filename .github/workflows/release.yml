@@ -83,7 +83,7 @@ jobs:
       - name: Build (Release)
         env:
           AmongUs: ${{ env.AMONG_US_LIBS_DIR }}
-          Build: ${{ env.AMONG_US_LIBS_DIR }}
+          AmongUsBuild: ${{ env.AMONG_US_LIBS_DIR }}
         run: dotnet build lobby-utils.sln --configuration Release --no-restore --nologo -v minimal
 
       - name: Prepare release assets
@@ -105,3 +105,4 @@ jobs:
           generate_release_notes: true
           files: |
             LobbyUtils-${{ github.ref_name }}.zip
+
