@@ -1,84 +1,223 @@
 using HarmonyLib;
-using UnityEngine;
-using BepInEx.Logging;
 using InnerNet;
-using System;
+using System.Collections.Concurrent;
+using UnityEngine;
 
 namespace LobbyUtils;
 
+[System.Runtime.Versioning.SupportedOSPlatform("windows")]
+public readonly record struct LobbyConnectionInfo(
+    bool HasClient,
+    bool IsConnected,
+    string GameState,
+    int? GameId,
+    string? LobbyCode,
+    string? ServerIp,
+    int? ServerPort,
+    int? ClientId,
+    int? HostId,
+    bool? IsHost,
+    bool? IsInGame
+);
+
+[System.Runtime.Versioning.SupportedOSPlatform("windows")]
 public static class LobbyManager
 {
-    public static string? TargetLobbyCode { get; set; }
-    public static string? TargetServerIp { get; set; }
-    public static ushort? TargetServerPort { get; set; }
+    private static readonly ConcurrentQueue<LobbyRequest> PendingRequests = new();
+    private static readonly object ConnectionInfoLock = new();
+    private static LobbyConnectionInfo _connectionInfo = new(
+        HasClient: false,
+        IsConnected: false,
+        GameState: InnerNetClient.GameStates.NotJoined.ToString(),
+        GameId: null,
+        LobbyCode: null,
+        ServerIp: null,
+        ServerPort: null,
+        ClientId: null,
+        HostId: null,
+        IsHost: null,
+        IsInGame: null);
+    private static int? _lastGameIdConversionError;
 
-    public static bool ShouldAttemptConnection { get; set; } = false;
-
-    // Call this from a safe place (e.g. main menu patch) to execute the join
-    public static void AttemptConnection()
+    public static LobbyConnectionInfo GetConnectionInfo()
     {
-        if (AmongUsClient.Instance == null || AmongUsClient.Instance.GameState != InnerNetClient.GameStates.NotJoined)
+        lock (ConnectionInfoLock)
         {
-            return; // Not in a state to join
+            return _connectionInfo;
+        }
+    }
+
+    public static void RefreshConnectionInfo()
+    {
+        UpdateConnectionInfo();
+    }
+
+    public static void Enqueue(LobbyRequest request, string source)
+    {
+        PendingRequests.Enqueue(request);
+        LobbyUtilsPlugin.PluginLog.LogInfo($"Queued join request from {source}.");
+    }
+
+    public static void DrainAndAttemptConnection()
+    {
+        RefreshConnectionInfo();
+
+        if (AmongUsClient.Instance == null)
+        {
+            return;
         }
 
-        if (!string.IsNullOrEmpty(TargetServerIp) && TargetServerPort.HasValue)
+        if (AmongUsClient.Instance.GameState != InnerNetClient.GameStates.NotJoined)
         {
-            // Modern Among Us uses ServerManager, but direct IP connection can be set via EndPoint
-            AmongUsClient.Instance.SetEndpoint(TargetServerIp, TargetServerPort.Value);
-            TargetServerIp = null;
-            TargetServerPort = null;
+            return;
         }
 
-        if (!string.IsNullOrEmpty(TargetLobbyCode))
+        while (PendingRequests.TryDequeue(out var request))
         {
-            if (TryConvertCode(TargetLobbyCode, out int gameId))
+            ProcessRequest(AmongUsClient.Instance, request);
+        }
+    }
+
+    private static void UpdateConnectionInfo()
+    {
+        if (AmongUsClient.Instance == null)
+        {
+            lock (ConnectionInfoLock)
             {
-                AmongUsClient.Instance.GameMode = GameModes.OnlineGame;
-                AmongUsClient.Instance.JoinGame(gameId);
-                LobbyUtilsPlugin.Log.LogInfo($"Attempting to join game: {TargetLobbyCode} ({gameId})");
+                _connectionInfo = new LobbyConnectionInfo(
+                    HasClient: false,
+                    IsConnected: false,
+                    GameState: InnerNetClient.GameStates.NotJoined.ToString(),
+                    GameId: null,
+                    LobbyCode: null,
+                    ServerIp: null,
+                    ServerPort: null,
+                    ClientId: null,
+                    HostId: null,
+                    IsHost: null,
+                    IsInGame: null);
             }
-            else
-            {
-                LobbyUtilsPlugin.Log.LogError($"Invalid lobby code format: {TargetLobbyCode}");
-            }
-            TargetLobbyCode = null;
+            return;
         }
 
-        ShouldAttemptConnection = false;
+        var client = AmongUsClient.Instance;
+        string? lobbyCode = TryFormatLobbyCode(client.GameId);
+        string? serverIp = string.IsNullOrWhiteSpace(client.networkAddress) ? null : client.networkAddress;
+        int? serverPort = client.networkPort > 0 ? client.networkPort : null;
+        int? gameId = client.GameId != 0 ? client.GameId : null;
+        bool isConnected = client.GameState != InnerNetClient.GameStates.NotJoined;
+
+        lock (ConnectionInfoLock)
+        {
+            _connectionInfo = new LobbyConnectionInfo(
+                HasClient: true,
+                IsConnected: isConnected,
+                GameState: client.GameState.ToString(),
+                GameId: gameId,
+                LobbyCode: lobbyCode,
+                ServerIp: serverIp,
+                ServerPort: serverPort,
+                ClientId: client.ClientId,
+                HostId: client.HostId,
+                IsHost: client.AmHost,
+                IsInGame: client.IsInGame);
+        }
+    }
+
+    private static string? TryFormatLobbyCode(int gameId)
+    {
+        if (gameId == 0)
+        {
+            return null;
+        }
+
+        try
+        {
+            _lastGameIdConversionError = null;
+            return GameCode.IntToGameName(gameId);
+        }
+        catch (System.Exception ex)
+        {
+            if (_lastGameIdConversionError != gameId)
+            {
+                _lastGameIdConversionError = gameId;
+                LobbyUtilsPlugin.PluginLog.LogWarning($"Lobby code conversion failed for gameId={gameId}: {ex.Message}");
+            }
+
+            return null;
+        }
+    }
+
+    private static void ProcessRequest(AmongUsClient client, LobbyRequest request)
+    {
+        bool hasCode = !string.IsNullOrWhiteSpace(request.LobbyCode);
+        bool hasEndpoint = !string.IsNullOrWhiteSpace(request.ServerIp) && request.ServerPort.HasValue;
+
+        if (hasEndpoint)
+        {
+            client.SetEndpoint(request.ServerIp!, request.ServerPort!.Value, dtls: false);
+            LobbyUtilsPlugin.PluginLog.LogInfo($"Applied server endpoint: {request.ServerIp}:{request.ServerPort.Value}");
+        }
+
+        if (!hasCode)
+        {
+            if (hasEndpoint)
+            {
+                LobbyUtilsPlugin.PluginLog.LogWarning("Ignored endpoint-only request. Lobby code is required for joining.");
+            }
+            return;
+        }
+
+        if (!TryConvertCode(request.LobbyCode!, out int gameId))
+        {
+            LobbyUtilsPlugin.PluginLog.LogError($"Invalid lobby code: {request.LobbyCode}");
+            return;
+        }
+
+        if (hasEndpoint)
+        {
+            ushort port = request.ServerPort ?? 0;
+            client.StartCoroutine(client.CoJoinOnlineGameFromCode(gameId, fromEnterCode: true));
+            LobbyUtilsPlugin.PluginLog.LogInfo($"Attempting lobby join with custom endpoint: {request.LobbyCode} via {request.ServerIp}:{port}");
+            return;
+        }
+
+        client.StartCoroutine(client.CoFindGameInfoFromCodeAndJoin(gameId));
+        LobbyUtilsPlugin.PluginLog.LogInfo($"Attempting lobby join: {request.LobbyCode} ({gameId})");
     }
 
     private static bool TryConvertCode(string code, out int result)
     {
-        try 
+        try
         {
-            // Among Us InnerNet.GameCode.GameNameToInt
-            result = InnerNet.GameCode.GameNameToInt(code);
-            return true;
+            result = GameCode.GameNameToInt(code);
+            return result != 0;
         }
-        catch 
+        catch (System.Exception ex)
         {
+            LobbyUtilsPlugin.PluginLog.LogError($"Lobby code conversion failed: {ex.Message}");
             result = 0;
             return false;
         }
     }
 }
 
-// Patch MainMenuManager or a similar persistent updater to poll the state
-[HarmonyPatch(typeof(MainMenuManager), nameof(MainMenuManager.Update))]
+[HarmonyPatch(typeof(MainMenuManager), "LateUpdate")]
+[System.Runtime.Versioning.SupportedOSPlatform("windows")]
 public static class MainMenuManagerPatch
 {
     public static void Postfix()
     {
-        // Poll for IPC changes or initial CLI args
-        if (LobbyManager.TargetLobbyCode != null || LobbyManager.TargetServerIp != null)
-        {
-            LobbyManager.ShouldAttemptConnection = true;
-        }
+        LobbyManager.DrainAndAttemptConnection();
+    }
+}
 
-        if (LobbyManager.ShouldAttemptConnection)
-        {
-            LobbyManager.AttemptConnection();
-        }
+[HarmonyPatch(typeof(AmongUsClient), "Update")]
+[System.Runtime.Versioning.SupportedOSPlatform("windows")]
+public static class AmongUsClientUpdatePatch
+{
+    public static void Postfix()
+    {
+        LobbyManager.RefreshConnectionInfo();
     }
 }

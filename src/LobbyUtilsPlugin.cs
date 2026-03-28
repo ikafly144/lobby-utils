@@ -1,52 +1,37 @@
 using BepInEx;
 using BepInEx.Unity.IL2CPP;
 using HarmonyLib;
-using Reactor;
 using System;
+using System.Runtime.Versioning;
 
 namespace LobbyUtils;
 
-[BepInAutoPlugin]
+[BepInPlugin(PluginId, PluginName, PluginVersion)]
 [BepInProcess("Among Us.exe")]
-[BepInDependency(ReactorPlugin.Id)]
-public partial class LobbyUtilsPlugin : BasePlugin
+[SupportedOSPlatform("windows")]
+public class LobbyUtilsPlugin : BasePlugin
 {
-    public Harmony Harmony { get; } = new(Id);
-    public static BepInEx.Logging.ManualLogSource Log { get; private set; } = null!;
+    public const string PluginId = "com.ikafly.lobbyutils";
+    public const string PluginName = "LobbyUtils";
+    public const string PluginVersion = "1.0.0";
+
+    public Harmony Harmony { get; } = new(PluginId);
+
+    public static BepInEx.Logging.ManualLogSource PluginLog { get; private set; } = null!;
 
     public override void Load()
     {
-        Log = base.Log;
-        Log.LogInfo("LobbyUtils is loaded!");
+        PluginLog = base.Log;
+        PluginLog.LogInfo("LobbyUtils loaded.");
 
-        // Parse CLI args
-        string[] args = Environment.GetCommandLineArgs();
-        for (int i = 0; i < args.Length; i++)
+        var initialRequest = CommandLineParser.Parse(Environment.GetCommandLineArgs(), PluginLog);
+        if (initialRequest is not null)
         {
-            if (args[i] == "--lobby-code" && i + 1 < args.Length)
-            {
-                LobbyManager.TargetLobbyCode = args[i + 1];
-                Log.LogInfo($"Parsed lobby code from CLI: {LobbyManager.TargetLobbyCode}");
-            }
-            if (args[i] == "--server-ip" && i + 1 < args.Length)
-            {
-                LobbyManager.TargetServerIp = args[i + 1];
-                Log.LogInfo($"Parsed server IP from CLI: {LobbyManager.TargetServerIp}");
-            }
-            if (args[i] == "--server-port" && i + 1 < args.Length)
-            {
-                if (ushort.TryParse(args[i + 1], out ushort port))
-                {
-                    LobbyManager.TargetServerPort = port;
-                    Log.LogInfo($"Parsed server port from CLI: {LobbyManager.TargetServerPort}");
-                }
-            }
+            LobbyManager.Enqueue(initialRequest.Value, "CLI");
         }
 
-        // Start IPC Server
-        IPCServer.Start(Log);
-
-        // Apply Harmony patches
+        IPCServer.Start(PluginLog);
         Harmony.PatchAll();
     }
 }
+

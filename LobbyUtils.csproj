@@ -1,5 +1,4 @@
 <Project Sdk="Microsoft.NET.Sdk">
-
   <PropertyGroup>
     <TargetFramework>net6.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
@@ -7,17 +6,53 @@
     <LangVersion>11</LangVersion>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <RootNamespace>LobbyUtils</RootNamespace>
-    
-    <!-- BepInEx Properties -->
+
     <PluginId>com.ikafly.lobbyutils</PluginId>
     <PluginName>LobbyUtils</PluginName>
     <PluginVersion>1.0.0</PluginVersion>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="BepInEx.Unity.IL2CPP" Version="6.0.0-*" IncludeAssets="compile" />
     <PackageReference Include="BepInEx.PluginInfoProps" Version="2.*" />
-    <PackageReference Include="Reactor" Version="1.*" />
   </ItemGroup>
 
+  <PropertyGroup>
+    <UseDirectGameReferences>false</UseDirectGameReferences>
+    <UseDirectGameReferences Condition="'$(Configuration)' != 'Release' and '$(AmongUs)' != ''">true</UseDirectGameReferences>
+    <UseDirectGameReferences Condition="'$(Configuration)' == 'Release' and '$(Build)' != ''">true</UseDirectGameReferences>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(UseDirectGameReferences)' == 'true' and '$(Configuration)' != 'Release'">
+    <LibReference Include="$(AmongUs)\BepInEx\core\*.dll" />
+    <LibReference Include="$(AmongUs)\BepInEx\interop\*.dll" />
+    <Reference Include="@(LibReference)" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(UseDirectGameReferences)' == 'true' and '$(Configuration)' == 'Release'">
+    <LibReference Include="$(Build)\core\*.dll" />
+    <LibReference Include="$(Build)\interop\*.dll" />
+    <Reference Include="@(LibReference)" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(UseDirectGameReferences)' != 'true'">
+    <PackageReference Include="BepInEx.Unity.IL2CPP" Version="6.0.0-be.755" IncludeAssets="compile" />
+    <PackageReference Include="AmongUs.GameLibs.Steam" Version="2025.10.14" IncludeAssets="compile" GeneratePathProperty="true" />
+
+    <Reference Include="Assembly-CSharp">
+      <HintPath>$(PkgAmongUs_GameLibs_Steam)\build\Assembly-CSharp.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Assembly-CSharp-firstpass">
+      <HintPath>$(PkgAmongUs_GameLibs_Steam)\build\Assembly-CSharp-firstpass.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Hazel">
+      <HintPath>$(PkgAmongUs_GameLibs_Steam)\build\Hazel.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.CoreModule">
+      <HintPath>$(PkgAmongUs_GameLibs_Steam)\build\UnityEngine.CoreModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
 </Project>
