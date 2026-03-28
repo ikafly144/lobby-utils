@@ -1,0 +1,49 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore
+        run: dotnet restore lobby-utils.sln --nologo
+
+      - name: Build (Release)
+        run: dotnet build lobby-utils.sln --configuration Release --no-restore --nologo -v minimal
+
+      - name: Prepare release assets
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path artifacts -Force | Out-Null
+          Copy-Item -Path "bin\Release\net6.0\LobbyUtils.dll" -Destination "artifacts\LobbyUtils.dll" -Force
+          if (Test-Path "bin\Release\net6.0\LobbyUtils.pdb") {
+            Copy-Item -Path "bin\Release\net6.0\LobbyUtils.pdb" -Destination "artifacts\LobbyUtils.pdb" -Force
+          }
+
+      - name: Create release archive
+        shell: pwsh
+        run: Compress-Archive -Path "artifacts\*" -DestinationPath "LobbyUtils-${{ github.ref_name }}.zip" -Force
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            LobbyUtils-${{ github.ref_name }}.zip

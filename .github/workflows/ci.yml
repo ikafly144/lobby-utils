@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        configuration: [Debug, Release]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore
+        run: dotnet restore lobby-utils.sln --nologo
+
+      - name: Build
+        run: dotnet build lobby-utils.sln --configuration ${{ matrix.configuration }} --no-restore --nologo -v minimal
+
+      - name: Upload release build artifact
+        if: matrix.configuration == 'Release'
+        uses: actions/upload-artifact@v4
+        with:
+          name: LobbyUtils-Release-${{ github.sha }}
+          path: |
+            bin/Release/net6.0/LobbyUtils.dll
+            bin/Release/net6.0/LobbyUtils.pdb
+          if-no-files-found: error
