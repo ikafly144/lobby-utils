@@ -6,10 +6,15 @@
     <LangVersion>11</LangVersion>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <RootNamespace>LobbyUtils</RootNamespace>
+    <Version>1.0.0</Version>
+    <Product>LobbyUtils</Product>
 
-    <PluginId>com.ikafly.lobbyutils</PluginId>
+    <PluginId>net.sabafly.lobbyutils</PluginId>
     <PluginName>LobbyUtils</PluginName>
     <PluginVersion>1.0.0</PluginVersion>
+    <BepInExPluginGuid>$(PluginId)</BepInExPluginGuid>
+    <BepInExPluginName>$(PluginName)</BepInExPluginName>
+    <BepInExPluginVersion>$(PluginVersion)</BepInExPluginVersion>
   </PropertyGroup>
 
   <ItemGroup>

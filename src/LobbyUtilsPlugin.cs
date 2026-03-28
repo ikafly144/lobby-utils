@@ -6,16 +6,12 @@ using System.Runtime.Versioning;
 
 namespace LobbyUtils;
 
-[BepInPlugin(PluginId, PluginName, PluginVersion)]
+[BepInPlugin(MyPluginInfo.PLUGIN_GUID, MyPluginInfo.PLUGIN_NAME, MyPluginInfo.PLUGIN_VERSION)]
 [BepInProcess("Among Us.exe")]
 [SupportedOSPlatform("windows")]
 public class LobbyUtilsPlugin : BasePlugin
 {
-    public const string PluginId = "com.ikafly.lobbyutils";
-    public const string PluginName = "LobbyUtils";
-    public const string PluginVersion = "1.0.0";
-
-    public Harmony Harmony { get; } = new(PluginId);
+    public Harmony Harmony { get; } = new(MyPluginInfo.PLUGIN_GUID);
 
     public static BepInEx.Logging.ManualLogSource PluginLog { get; private set; } = null!;
 
