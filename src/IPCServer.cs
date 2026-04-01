@@ -150,6 +150,19 @@ public static class IPCServer
 
     private static void ProcessJoin(IPCMessage message, StreamWriter writer)
     {
+        if (!string.IsNullOrWhiteSpace(message.Code) && !string.IsNullOrWhiteSpace(message.Ip) && message.Port.HasValue)
+        {
+            LobbyManager.Enqueue(new LobbyRequest(message.Code, message.Ip, message.Port.Value), "IPC");
+            WriteResponse(
+                writer,
+                new IPCResponse
+                {
+                    Success = true,
+                    Action = "join",
+                    Message = "Queued server endpoint join."
+                });
+            return;
+        }
         if (!string.IsNullOrWhiteSpace(message.Code))
         {
             LobbyManager.Enqueue(new LobbyRequest(message.Code, null, null), "IPC");
@@ -160,20 +173,6 @@ public static class IPCServer
                     Success = true,
                     Action = "join",
                     Message = "Queued lobby join by code."
-                });
-            return;
-        }
-
-        if (!string.IsNullOrWhiteSpace(message.Ip) && message.Port.HasValue)
-        {
-            LobbyManager.Enqueue(new LobbyRequest(null, message.Ip, message.Port.Value), "IPC");
-            WriteResponse(
-                writer,
-                new IPCResponse
-                {
-                    Success = true,
-                    Action = "join",
-                    Message = "Queued server endpoint join."
                 });
             return;
         }
