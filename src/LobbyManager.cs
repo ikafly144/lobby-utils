@@ -105,13 +105,8 @@ public static class LobbyManager
 
         var client = AmongUsClient.Instance;
         string? lobbyCode = TryFormatLobbyCode(client.GameId);
-        string? serverIp;
-        int? serverPort;
-        lock (EndpointLock)
-        {
-            serverIp = _lastRequestedServerIp;
-            serverPort = _lastRequestedServerPort;
-        }
+        string? serverIp = GetServerIp(client);
+        int? serverPort = GetServerPort(client);
         int? gameId = client.GameId != 0 ? client.GameId : null;
         bool isConnected = client.GameState != InnerNetClient.GameStates.NotJoined;
 
@@ -129,6 +124,76 @@ public static class LobbyManager
                 HostId: client.HostId,
                 IsHost: client.AmHost,
                 IsInGame: client.IsInGame);
+        }
+    }
+
+    private static string? GetServerIp(AmongUsClient client)
+    {
+        try
+        {
+            if (client.connection == null)
+            {
+                lock (EndpointLock)
+                {
+                    return _lastRequestedServerIp;
+                }
+            }
+
+            var endPoint = client.connection.EndPoint;
+            if (endPoint != null)
+            {
+                string? address = endPoint.Address?.ToString();
+                if (!string.IsNullOrWhiteSpace(address))
+                {
+                    return address;
+                }
+            }
+
+            lock (EndpointLock)
+            {
+                return _lastRequestedServerIp;
+            }
+        }
+        catch (System.Exception ex)
+        {
+            LobbyUtilsPlugin.PluginLog.LogWarning($"Failed to get server IP: {ex.Message}");
+            lock (EndpointLock)
+            {
+                return _lastRequestedServerIp;
+            }
+        }
+    }
+
+    private static int? GetServerPort(AmongUsClient client)
+    {
+        try
+        {
+            if (client.connection == null)
+            {
+                lock (EndpointLock)
+                {
+                    return _lastRequestedServerPort;
+                }
+            }
+
+            var endPoint = client.connection.EndPoint;
+            if (endPoint != null && endPoint.Port > 0)
+            {
+                return endPoint.Port;
+            }
+
+            lock (EndpointLock)
+            {
+                return _lastRequestedServerPort;
+            }
+        }
+        catch (System.Exception ex)
+        {
+            LobbyUtilsPlugin.PluginLog.LogWarning($"Failed to get server port: {ex.Message}");
+            lock (EndpointLock)
+            {
+                return _lastRequestedServerPort;
+            }
         }
     }
 
