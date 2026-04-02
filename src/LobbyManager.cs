@@ -19,7 +19,9 @@ public readonly record struct LobbyConnectionInfo(
     int? ClientId,
     int? HostId,
     bool? IsHost,
-    bool? IsInGame
+    bool? IsInGame,
+    string? MatchMakerIp,
+    int? MatchMakerPort
 );
 
 [System.Runtime.Versioning.SupportedOSPlatform("windows")]
@@ -41,7 +43,9 @@ public static class LobbyManager
         ClientId: null,
         HostId: null,
         IsHost: null,
-        IsInGame: null);
+        IsInGame: null,
+        MatchMakerIp: null,
+        MatchMakerPort: null);
     private static int? _lastGameIdConversionError;
 
     public static LobbyConnectionInfo GetConnectionInfo()
@@ -100,7 +104,9 @@ public static class LobbyManager
                     ClientId: null,
                     HostId: null,
                     IsHost: null,
-                    IsInGame: null);
+                    IsInGame: null,
+                    MatchMakerIp: null,
+                    MatchMakerPort: null);
             }
             return;
         }
@@ -111,6 +117,7 @@ public static class LobbyManager
         int? serverPort = GetServerPort(client);
         int? gameId = client.GameId != 0 ? client.GameId : null;
         bool isConnected = client.GameState != InnerNetClient.GameStates.NotJoined;
+        var server = FastDestroyableSingleton<ServerManager>.Instance.CurrentRegion.Servers.FirstOrDefault();
 
         lock (ConnectionInfoLock)
         {
@@ -125,7 +132,9 @@ public static class LobbyManager
                 ClientId: client.ClientId,
                 HostId: client.HostId,
                 IsHost: client.AmHost,
-                IsInGame: client.IsInGame);
+                IsInGame: client.IsInGame,
+                MatchMakerIp: server?.Ip,
+                MatchMakerPort: server?.Port);
         }
     }
 
@@ -226,21 +235,21 @@ public static class LobbyManager
     private static void ProcessRequest(AmongUsClient client, LobbyRequest request)
     {
         bool hasCode = !string.IsNullOrWhiteSpace(request.LobbyCode);
-        bool hasEndpoint = !string.IsNullOrWhiteSpace(request.ServerIp) && request.ServerPort.HasValue;
+        bool hasMatchMaker = !string.IsNullOrWhiteSpace(request.MatchMakerIp) && request.MatchMakerPort.HasValue;
 
-        if (hasEndpoint)
+        if (hasMatchMaker)
         {
             lock (EndpointLock)
             {
                 _lastRequestedServerIp = request.ServerIp;
                 _lastRequestedServerPort = request.ServerPort;
             }
-            FastDestroyableSingleton<ServerManager>.Instance.SetRegion(GetRegion(request.ServerIp!, request.ServerPort!.Value));
+            FastDestroyableSingleton<ServerManager>.Instance.SetRegion(GetRegion(request.MatchMakerIp!, request.MatchMakerPort!.Value));
         }
 
         if (!hasCode)
         {
-            if (hasEndpoint)
+            if (hasMatchMaker)
             {
                 LobbyUtilsPlugin.PluginLog.LogWarning("Ignored endpoint-only request. Lobby code is required for joining.");
             }
@@ -253,15 +262,13 @@ public static class LobbyManager
             return;
         }
 
-        if (hasEndpoint)
+        if (hasMatchMaker)
         {
-            ushort port = request.ServerPort ?? 0;
-            client.StartCoroutine(client.CoJoinOnlineGameFromCode(gameId, fromEnterCode: true));
-            LobbyUtilsPlugin.PluginLog.LogInfo($"Attempting lobby join with custom endpoint: {request.LobbyCode} via {request.ServerIp}:{port}");
+            LobbyUtilsPlugin.PluginLog.LogInfo($"Attempting lobby join with custom endpoint: {request.LobbyCode} via {request.ServerIp}:{request.ServerPort}");
             return;
         }
 
-        client.StartCoroutine(client.CoFindGameInfoFromCodeAndJoin(gameId));
+        client.StartCoroutine(client.CoJoinOnlinePublicGame(gameId, request.ServerIp, request.ServerPort, AmongUsClient.MainMenuTarget.OnlineMenu));
         LobbyUtilsPlugin.PluginLog.LogInfo($"Attempting lobby join: {request.LobbyCode} ({gameId})");
     }
 

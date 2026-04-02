@@ -14,6 +14,8 @@ public sealed class IPCMessage
     public string? Code { get; set; }
     public string? Ip { get; set; }
     public ushort? Port { get; set; }
+    public string? MatchMakerIp { get; set; }
+    public ushort? MatchMakerPort { get; set; }
 }
 
 [SupportedOSPlatform("windows")]
@@ -152,7 +154,7 @@ public static class IPCServer
     {
         if (!string.IsNullOrWhiteSpace(message.Code) && !string.IsNullOrWhiteSpace(message.Ip) && message.Port.HasValue)
         {
-            LobbyManager.Enqueue(new LobbyRequest(message.Code, message.Ip, message.Port.Value), "IPC");
+            LobbyManager.Enqueue(new LobbyRequest(message.Code, message.Ip, message.Port.Value, message.MatchMakerIp, message.MatchMakerPort), "IPC");
             WriteResponse(
                 writer,
                 new IPCResponse
@@ -160,19 +162,6 @@ public static class IPCServer
                     Success = true,
                     Action = "join",
                     Message = "Queued server endpoint join."
-                });
-            return;
-        }
-        if (!string.IsNullOrWhiteSpace(message.Code))
-        {
-            LobbyManager.Enqueue(new LobbyRequest(message.Code, null, null), "IPC");
-            WriteResponse(
-                writer,
-                new IPCResponse
-                {
-                    Success = true,
-                    Action = "join",
-                    Message = "Queued lobby join by code."
                 });
             return;
         }
@@ -184,7 +173,7 @@ public static class IPCServer
             {
                 Success = false,
                 Action = "join",
-                Message = "Join requires either code or (ip + port)."
+                Message = "Join requires code and (ip + port)."
             });
     }
 
