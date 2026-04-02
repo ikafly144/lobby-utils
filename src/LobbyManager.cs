@@ -245,6 +245,7 @@ public static class LobbyManager
                 _lastRequestedServerPort = request.ServerPort;
             }
             FastDestroyableSingleton<ServerManager>.Instance.SetRegion(GetRegion(request.MatchMakerIp!, request.MatchMakerPort!.Value));
+            LobbyUtilsPlugin.PluginLog.LogInfo($"Set custom matchmaker region to {request.MatchMakerIp}:{request.MatchMakerPort} for lobby code {request.LobbyCode}");
         }
 
         if (!hasCode)
