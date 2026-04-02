@@ -150,10 +150,10 @@ public static class LobbyManager
                 }
             }
 
-            var server = FastDestroyableSingleton<ServerManager>.Instance.CurrentRegion.Servers.FirstOrDefault();
-            if (server != null)
+            var serverIp = AmongUsClient.Instance.networkAddress;
+            if (serverIp != null)
             {
-                string? address = server.Ip?.ToString();
+                string? address = serverIp.Contains(':') ? $"[{serverIp}]" : serverIp; // Format IPv6 addresses with brackets for consistency
                 if (!string.IsNullOrWhiteSpace(address))
                 {
                     return address;
@@ -187,10 +187,10 @@ public static class LobbyManager
                 }
             }
 
-            var server = FastDestroyableSingleton<ServerManager>.Instance.CurrentRegion.Servers.FirstOrDefault();
-            if (server != null && server.Port > 0)
+            var serverPort = AmongUsClient.Instance.networkPort;
+            if (serverPort > 0)
             {
-                return server.Port;
+                return serverPort;
             }
 
             lock (EndpointLock)
