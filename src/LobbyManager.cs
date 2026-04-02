@@ -263,13 +263,13 @@ public static class LobbyManager
             return;
         }
 
+        AmongUsClient.Instance.StartCoroutine(AmongUsClient.Instance.CoJoinOnlinePublicGame(gameId, request.ServerIp, request.ServerPort, AmongUsClient.MainMenuTarget.OnlineMenu));
         if (hasMatchMaker)
         {
-            LobbyUtilsPlugin.PluginLog.LogInfo($"Attempting lobby join with custom endpoint: {request.LobbyCode} via {request.ServerIp}:{request.ServerPort}");
+            LobbyUtilsPlugin.PluginLog.LogInfo($"Attempting lobby join with custom endpoint: {request.LobbyCode} via {request.ServerIp}:{request.ServerPort} ({gameId})");
             return;
         }
 
-        AmongUsClient.Instance.StartCoroutine(AmongUsClient.Instance.CoJoinOnlinePublicGame(gameId, request.ServerIp, request.ServerPort, AmongUsClient.MainMenuTarget.OnlineMenu));
         LobbyUtilsPlugin.PluginLog.LogInfo($"Attempting lobby join: {request.LobbyCode} ({gameId})");
     }
 
