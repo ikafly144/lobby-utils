@@ -30,8 +30,12 @@ public static class LobbyManager
     private static readonly ConcurrentQueue<LobbyRequest> PendingRequests = new();
     private static readonly object ConnectionInfoLock = new();
     private static readonly object EndpointLock = new();
+    private const float QueueDrainReadyDelaySeconds = 0.5f;
     private static string? _lastRequestedServerIp;
     private static int? _lastRequestedServerPort;
+    private static float? _readyForJoinSince;
+    private static bool _loggedQueueWait;
+    private static string? _lastQueueWaitReason;
     private static LobbyConnectionInfo _connectionInfo = new(
         HasClient: false,
         IsConnected: false,
@@ -71,20 +75,88 @@ public static class LobbyManager
     {
         RefreshConnectionInfo();
 
-        if (AmongUsClient.Instance == null)
+        if (PendingRequests.IsEmpty)
+        {
+            _readyForJoinSince = null;
+            _loggedQueueWait = false;
+            _lastQueueWaitReason = null;
+            return;
+        }
+
+        if (!IsReadyToProcessQueue(out string waitReason))
+        {
+            _readyForJoinSince = null;
+            LogQueueWait(waitReason);
+            return;
+        }
+
+        if (!_readyForJoinSince.HasValue)
+        {
+            _readyForJoinSince = Time.realtimeSinceStartup;
+            LogQueueWait("startup state is stabilizing");
+            return;
+        }
+
+        if (Time.realtimeSinceStartup - _readyForJoinSince.Value < QueueDrainReadyDelaySeconds)
         {
             return;
         }
 
-        if (AmongUsClient.Instance.GameState != InnerNetClient.GameStates.NotJoined)
+        if (_loggedQueueWait)
         {
-            return;
+            LobbyUtilsPlugin.PluginLog.LogInfo("Game is ready. Processing queued join request(s).");
+            _loggedQueueWait = false;
+            _lastQueueWaitReason = null;
         }
+
+        _readyForJoinSince = null;
 
         while (PendingRequests.TryDequeue(out var request))
         {
             ProcessRequest(request);
         }
+    }
+
+    private static bool IsReadyToProcessQueue(out string reason)
+    {
+        if (AmongUsClient.Instance == null)
+        {
+            reason = "AmongUsClient is not initialized";
+            return false;
+        }
+
+        if (AmongUsClient.Instance.GameState != InnerNetClient.GameStates.NotJoined)
+        {
+            reason = $"game state is {AmongUsClient.Instance.GameState}";
+            return false;
+        }
+
+        if (!UnityEngine.Object.FindObjectOfType<MainMenuManager>()?.finishStartup ?? false)
+        {
+            reason = "main menu is not initialized";
+            return false;
+        }
+
+        if (!FastDestroyableSingleton<EOSManager>.Instance.HasFinishedLoginFlow())
+        {
+            reason = "EOS login flow is not finished";
+            return false;
+        }
+
+        reason = string.Empty;
+        return true;
+    }
+
+    private static void LogQueueWait(string reason)
+    {
+        if (_loggedQueueWait && string.Equals(_lastQueueWaitReason, reason, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        _loggedQueueWait = true;
+        _lastQueueWaitReason = reason;
+        LobbyUtilsPlugin.PluginLog.LogInfo($"Queued join request is waiting until game preparation finishes ({reason}).");
     }
 
     private static void UpdateConnectionInfo()
@@ -329,7 +401,7 @@ public static unsafe class FastDestroyableSingleton<T> where T : MonoBehaviour
     }
 }
 
-[HarmonyPatch(typeof(MainMenuManager), "LateUpdate")]
+[HarmonyPatch(typeof(MainMenuManager), nameof(MainMenuManager.LateUpdate))]
 [System.Runtime.Versioning.SupportedOSPlatform("windows")]
 public static class MainMenuManagerPatch
 {
@@ -339,12 +411,12 @@ public static class MainMenuManagerPatch
     }
 }
 
-[HarmonyPatch(typeof(AmongUsClient), "Update")]
+[HarmonyPatch(typeof(AmongUsClient), nameof(AmongUsClient.Update))]
 [System.Runtime.Versioning.SupportedOSPlatform("windows")]
 public static class AmongUsClientUpdatePatch
 {
     public static void Postfix()
     {
-        LobbyManager.RefreshConnectionInfo();
+        LobbyManager.DrainAndAttemptConnection();
     }
 }
