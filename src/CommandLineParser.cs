@@ -46,7 +46,7 @@ public static class CommandLineParser
             if (!string.IsNullOrWhiteSpace(serverIp) && serverPort.HasValue)
             {
                 logger.LogInfo($"Parsed CLI server endpoint: {serverIp}:{serverPort.Value}");
-                return new LobbyRequest(null, serverIp, serverPort.Value);
+                return new LobbyRequest(lobbyCode, serverIp, serverPort.Value);
             }
             if (!string.IsNullOrWhiteSpace(serverIp) || serverPort.HasValue)
             {
