@@ -43,19 +43,17 @@ public static class CommandLineParser
 
         if (!string.IsNullOrWhiteSpace(lobbyCode))
         {
+            if (!string.IsNullOrWhiteSpace(serverIp) && serverPort.HasValue)
+            {
+                logger.LogInfo($"Parsed CLI server endpoint: {serverIp}:{serverPort.Value}");
+                return new LobbyRequest(null, serverIp, serverPort.Value);
+            }
+            if (!string.IsNullOrWhiteSpace(serverIp) || serverPort.HasValue)
+            {
+                logger.LogWarning("Both --server-ip and --server-port are required to use custom server join.");
+            }
             logger.LogInfo($"Parsed CLI lobby code: {lobbyCode}");
             return new LobbyRequest(lobbyCode, null, null);
-        }
-
-        if (!string.IsNullOrWhiteSpace(serverIp) && serverPort.HasValue)
-        {
-            logger.LogInfo($"Parsed CLI server endpoint: {serverIp}:{serverPort.Value}");
-            return new LobbyRequest(null, serverIp, serverPort.Value);
-        }
-
-        if (!string.IsNullOrWhiteSpace(serverIp) || serverPort.HasValue)
-        {
-            logger.LogWarning("Both --server-ip and --server-port are required to use custom server join.");
         }
 
         return null;

@@ -1,6 +1,8 @@
 using HarmonyLib;
+using Il2CppInterop.Runtime;
 using InnerNet;
 using System.Collections.Concurrent;
+using System.Linq.Expressions;
 using UnityEngine;
 
 namespace LobbyUtils;
@@ -139,10 +141,10 @@ public static class LobbyManager
                 }
             }
 
-            var endPoint = client.connection.EndPoint;
-            if (endPoint != null)
+            var server = FastDestroyableSingleton<ServerManager>.Instance.CurrentRegion.Servers.FirstOrDefault();
+            if (server != null)
             {
-                string? address = endPoint.Address?.ToString();
+                string? address = server.Ip?.ToString();
                 if (!string.IsNullOrWhiteSpace(address))
                 {
                     return address;
@@ -176,10 +178,10 @@ public static class LobbyManager
                 }
             }
 
-            var endPoint = client.connection.EndPoint;
-            if (endPoint != null && endPoint.Port > 0)
+            var server = FastDestroyableSingleton<ServerManager>.Instance.CurrentRegion.Servers.FirstOrDefault();
+            if (server != null && server.Port > 0)
             {
-                return endPoint.Port;
+                return server.Port;
             }
 
             lock (EndpointLock)
@@ -233,8 +235,7 @@ public static class LobbyManager
                 _lastRequestedServerIp = request.ServerIp;
                 _lastRequestedServerPort = request.ServerPort;
             }
-            client.SetEndpoint(request.ServerIp!, request.ServerPort!.Value, dtls: false);
-            LobbyUtilsPlugin.PluginLog.LogInfo($"Applied server endpoint: {request.ServerIp}:{request.ServerPort.Value}");
+            FastDestroyableSingleton<ServerManager>.Instance.SetRegion(GetRegion(request.ServerIp!, request.ServerPort!.Value));
         }
 
         if (!hasCode)
@@ -264,6 +265,21 @@ public static class LobbyManager
         LobbyUtilsPlugin.PluginLog.LogInfo($"Attempting lobby join: {request.LobbyCode} ({gameId})");
     }
 
+    private static IRegionInfo? GetRegion(string matchmakerIP, ushort matchmakerPort)
+    {
+        string prefix = "";
+        if (!matchmakerIP.StartsWith("http"))
+            prefix = $"http{(matchmakerPort == 443 ? "s" : "")}://";
+        return new StaticHttpRegionInfo($"{matchmakerIP}:{matchmakerPort}", StringNames.NoTranslation,
+                matchmakerIP, new(
+                    [
+                        new("http-1", $"{prefix}{matchmakerIP}",
+                        matchmakerPort, false)
+                    ]
+                )
+            ).TryCast<IRegionInfo>();
+    }
+
     private static bool TryConvertCode(string code, out int result)
     {
         try
@@ -276,6 +292,31 @@ public static class LobbyManager
             LobbyUtilsPlugin.PluginLog.LogError($"Lobby code conversion failed: {ex.Message}");
             result = 0;
             return false;
+        }
+    }
+}
+
+public static unsafe class FastDestroyableSingleton<T> where T : MonoBehaviour
+{
+    private static readonly IntPtr _fieldPtr;
+    private static readonly Func<IntPtr, T> _createObject;
+    static FastDestroyableSingleton()
+    {
+        _fieldPtr = IL2CPP.GetIl2CppField(Il2CppClassPointerStore<DestroyableSingleton<T>>.NativeClassPtr, nameof(DestroyableSingleton<T>._instance));
+        var constructor = typeof(T).GetConstructor(new[] { typeof(IntPtr) });
+        var ptr = Expression.Parameter(typeof(IntPtr));
+        var create = Expression.New(constructor!, ptr);
+        var lambda = Expression.Lambda<Func<IntPtr, T>>(create, ptr);
+        _createObject = lambda.Compile();
+    }
+
+    public static T Instance
+    {
+        get
+        {
+            IntPtr objectPointer;
+            IL2CPP.il2cpp_field_static_get_value(_fieldPtr, &objectPointer);
+            return objectPointer == IntPtr.Zero ? DestroyableSingleton<T>.Instance : _createObject(objectPointer);
         }
     }
 }
