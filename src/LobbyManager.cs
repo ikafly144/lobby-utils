@@ -83,7 +83,7 @@ public static class LobbyManager
 
         while (PendingRequests.TryDequeue(out var request))
         {
-            ProcessRequest(AmongUsClient.Instance, request);
+            ProcessRequest(request);
         }
     }
 
@@ -113,8 +113,8 @@ public static class LobbyManager
 
         var client = AmongUsClient.Instance;
         string? lobbyCode = TryFormatLobbyCode(client.GameId);
-        string? serverIp = GetServerIp(client);
-        int? serverPort = GetServerPort(client);
+        string? serverIp = GetServerIp();
+        int? serverPort = GetServerPort();
         int? gameId = client.GameId != 0 ? client.GameId : null;
         bool isConnected = client.GameState != InnerNetClient.GameStates.NotJoined;
         var server = FastDestroyableSingleton<ServerManager>.Instance.CurrentRegion.Servers.FirstOrDefault();
@@ -138,11 +138,11 @@ public static class LobbyManager
         }
     }
 
-    private static string? GetServerIp(AmongUsClient client)
+    private static string? GetServerIp()
     {
         try
         {
-            if (client.connection == null)
+            if (AmongUsClient.Instance.connection == null)
             {
                 lock (EndpointLock)
                 {
@@ -175,11 +175,11 @@ public static class LobbyManager
         }
     }
 
-    private static int? GetServerPort(AmongUsClient client)
+    private static int? GetServerPort()
     {
         try
         {
-            if (client.connection == null)
+            if (AmongUsClient.Instance.connection == null)
             {
                 lock (EndpointLock)
                 {
@@ -232,7 +232,7 @@ public static class LobbyManager
         }
     }
 
-    private static void ProcessRequest(AmongUsClient client, LobbyRequest request)
+    private static void ProcessRequest(LobbyRequest request)
     {
         bool hasCode = !string.IsNullOrWhiteSpace(request.LobbyCode);
         bool hasMatchMaker = !string.IsNullOrWhiteSpace(request.MatchMakerIp) && request.MatchMakerPort.HasValue;
@@ -269,7 +269,7 @@ public static class LobbyManager
             return;
         }
 
-        client.StartCoroutine(client.CoJoinOnlinePublicGame(gameId, request.ServerIp, request.ServerPort, AmongUsClient.MainMenuTarget.OnlineMenu));
+        AmongUsClient.Instance.StartCoroutine(AmongUsClient.Instance.CoJoinOnlinePublicGame(gameId, request.ServerIp, request.ServerPort, AmongUsClient.MainMenuTarget.OnlineMenu));
         LobbyUtilsPlugin.PluginLog.LogInfo($"Attempting lobby join: {request.LobbyCode} ({gameId})");
     }
 
