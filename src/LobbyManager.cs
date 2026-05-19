@@ -21,7 +21,9 @@ public readonly record struct LobbyConnectionInfo(
     bool? IsHost,
     bool? IsInGame,
     string? MatchMakerIp,
-    int? MatchMakerPort
+    int? MatchMakerPort,
+    int? JoinedPlayers,
+    int? MaxPlayers
 );
 
 [System.Runtime.Versioning.SupportedOSPlatform("windows")]
@@ -49,7 +51,9 @@ public static class LobbyManager
         IsHost: null,
         IsInGame: null,
         MatchMakerIp: null,
-        MatchMakerPort: null);
+        MatchMakerPort: null,
+        JoinedPlayers: null,
+        MaxPlayers: null);
     private static int? _lastGameIdConversionError;
 
     public static LobbyConnectionInfo GetConnectionInfo()
@@ -178,7 +182,9 @@ public static class LobbyManager
                     IsHost: null,
                     IsInGame: null,
                     MatchMakerIp: null,
-                    MatchMakerPort: null);
+                    MatchMakerPort: null,
+                    JoinedPlayers: null,
+                    MaxPlayers: null);
             }
             return;
         }
@@ -206,7 +212,9 @@ public static class LobbyManager
                 IsHost: client.AmHost,
                 IsInGame: client.IsInGame,
                 MatchMakerIp: server?.Ip,
-                MatchMakerPort: server?.Port);
+                MatchMakerPort: server?.Port,
+                JoinedPlayers: PlayerControl.AllPlayerControls.Count,
+                MaxPlayers: GameManager.Instance?.LogicOptions?.currentGameOptions.MaxPlayers);
         }
     }
 
@@ -418,5 +426,26 @@ public static class AmongUsClientUpdatePatch
     public static void Postfix()
     {
         LobbyManager.DrainAndAttemptConnection();
+    }
+}
+
+[HarmonyPatch(typeof(DiscordManager), nameof(DiscordManager.Start))]
+[System.Runtime.Versioning.SupportedOSPlatform("windows")]
+public static class DiscordManagerStartPatch
+{
+    public static bool Prefix()
+    {
+        return false;
+    }
+}
+
+
+[HarmonyPatch(typeof(DiscordManager), nameof(DiscordManager.FixedUpdate))]
+[System.Runtime.Versioning.SupportedOSPlatform("windows")]
+public static class DiscordManagerFixedUpdatePatch
+{
+    public static bool Prefix()
+    {
+        return false;
     }
 }
